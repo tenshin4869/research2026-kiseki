@@ -2,6 +2,10 @@
 
 Simple PDR Trajectory Visualizer for phyphox iPhone inertial sensor logs.
 
+See [docs/implementation_status.md](docs/implementation_status.md) for the
+current implementation summary, correction methods, observations, and next
+tasks.
+
 ## Setup
 
 ```bash
