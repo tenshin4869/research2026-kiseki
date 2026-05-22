@@ -39,3 +39,8 @@ visualization:
   figure_dpi: 200
   equal_axis: true
   show_grid: true
+
+self_alignment:
+  output_subdir: "self_alignment"
+  cluster_eps_m: 1.0
+  min_cluster_size: 2

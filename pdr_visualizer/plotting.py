@@ -123,6 +123,58 @@ def plot_overlay(
     _save(fig, output_path, dpi)
 
 
+def plot_anchor_clusters(
+    trajectories: list[tuple[str, str, pd.DataFrame]],
+    event_df: pd.DataFrame,
+    cluster_df: pd.DataFrame,
+    output_path: str | Path,
+    title: str,
+    dpi: int,
+    equal_axis: bool,
+    show_grid: bool,
+) -> None:
+    fig, ax = plt.subplots(figsize=(8, 8))
+    for trial_id, holding_position, trajectory_df in trajectories:
+        label = f"{trial_id} ({holding_position})"
+        _draw_trajectory(ax, trajectory_df, label=label, mark_end=False)
+
+    markers = {"start": "s", "turn": "^", "end": "x"}
+    for event_type, group in event_df.groupby("event_type"):
+        ax.scatter(
+            group["x"],
+            group["y"],
+            marker=markers.get(event_type, "o"),
+            s=28,
+            alpha=0.45,
+            label=f"{event_type} events",
+        )
+
+    if not cluster_df.empty:
+        ax.scatter(
+            cluster_df["x"],
+            cluster_df["y"],
+            s=180,
+            facecolors="none",
+            edgecolors="black",
+            linewidths=1.6,
+            label="anchor clusters",
+        )
+        for _, row in cluster_df.iterrows():
+            ax.text(
+                row["x"],
+                row["y"],
+                f"{int(row['cluster_id'])}:{row['event_type']}({int(row['n_events'])})",
+                fontsize=8,
+                ha="left",
+                va="bottom",
+            )
+
+    ax.set_title(title)
+    ax.legend(fontsize=8)
+    _style_trajectory_axis(ax, equal_axis, show_grid)
+    _save(fig, output_path, dpi)
+
+
 def _shade_turning_regions(axes: list[plt.Axes], heading_df: pd.DataFrame) -> None:
     mask = heading_df["is_turning"].to_numpy()
     t = heading_df["t"].to_numpy()

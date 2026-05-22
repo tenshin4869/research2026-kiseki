@@ -77,6 +77,16 @@ Plot turn-correction v2 overlays:
 python3 scripts/plot_trials.py --holding-position hand --trajectory-kind v2 --config config.yaml
 ```
 
+Extract self-generated anchor candidates from multiple trajectories:
+
+```bash
+# no single-trajectory correction
+python3 scripts/self_align_trials.py --holding-position hand --trajectory-kind raw --config config.yaml
+
+# with turn-correction v2
+python3 scripts/self_align_trials.py --holding-position hand --trajectory-kind v2 --config config.yaml
+```
+
 ## Turn Correction
 
 The corrected trajectory detects turning intervals from angular velocity and only
@@ -90,3 +100,11 @@ gyro bias re-estimation. Its outputs are separated under:
 outputs/turn_correction_v2/processed/
 outputs/turn_correction_v2/figures/
 ```
+
+## Self Alignment
+
+The `self_align_trials.py` command extracts start, turn, and end event points
+from multiple trajectories, clusters nearby events, and visualizes the cluster
+centers as self-generated anchor candidates. Run it for both `raw` and `v2`
+trajectories to compare structures with and without single-trajectory PDR
+correction.

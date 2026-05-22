@@ -370,3 +370,65 @@ Useful next steps:
 5. Add a map or route constraint only after raw PDR behavior is understood.
    Map matching is powerful, but it can hide sensor problems if introduced too
    early.
+
+## ver2.0 Direction: Self-Anchored Trajectory Alignment
+
+The ver2.0 branch introduces the first step toward:
+
+```text
+Self-Anchored Trajectory Alignment for Map-Free PDR
+```
+
+The goal is not to force one trajectory to look correct. Instead, it extracts
+common event points from multiple trajectories and clusters them into
+self-generated anchor candidates.
+
+This is intended to support two parallel analyses:
+
+```text
+raw trajectories:
+  no single-trajectory PDR correction
+
+v2 trajectories:
+  with turn-correction v2 applied before self-alignment
+```
+
+The first implemented version extracts:
+
+```text
+start events
+turn events
+end events
+```
+
+and clusters nearby points using a simple distance-based DBSCAN-style method.
+The outputs are:
+
+```text
+outputs/self_alignment/raw/processed/
+outputs/self_alignment/raw/figures/
+outputs/self_alignment/v2/processed/
+outputs/self_alignment/v2/figures/
+```
+
+Example commands:
+
+```bash
+python3 scripts/self_align_trials.py --holding-position hand --trajectory-kind raw --config config.yaml
+python3 scripts/self_align_trials.py --holding-position hand --trajectory-kind v2 --config config.yaml
+python3 scripts/self_align_trials.py --holding-position pocket --trajectory-kind raw --config config.yaml
+python3 scripts/self_align_trials.py --holding-position pocket --trajectory-kind v2 --config config.yaml
+```
+
+This is not yet full trajectory optimization. It is the visibility layer for
+checking whether repeated trajectories produce stable anchor candidates. Once
+anchor candidates are meaningful, the next step is to optimize per-trajectory
+parameters such as:
+
+```text
+heading_offset
+step_scale
+turn_gain
+```
+
+so that event points align better across trajectories.

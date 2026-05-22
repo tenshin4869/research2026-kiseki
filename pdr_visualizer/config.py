@@ -53,6 +53,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "equal_axis": True,
         "show_grid": True,
     },
+    "self_alignment": {
+        "output_subdir": "self_alignment",
+        "cluster_eps_m": 1.0,
+        "min_cluster_size": 2,
+    },
     "paths": {
         "raw_data_dir": "data/raw",
         "processed_dir": "outputs/processed",
