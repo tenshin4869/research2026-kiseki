@@ -56,6 +56,15 @@ def plot_heading(
     axes[0].grid(show_grid)
 
     axes[1].plot(heading_df["t"], heading_df["heading_rad"], label="heading_rad")
+    if "heading_raw_rad" in heading_df.columns:
+        axes[1].plot(
+            heading_df["t"],
+            heading_df["heading_raw_rad"],
+            label="heading_raw_rad",
+            alpha=0.55,
+        )
+    if "is_turning" in heading_df.columns:
+        _shade_turning_regions(axes, heading_df)
     axes[1].set_xlabel("Time [s]")
     axes[1].set_ylabel("Heading [rad]")
     axes[1].legend()
@@ -78,6 +87,24 @@ def plot_trajectory(
     _save(fig, output_path, dpi)
 
 
+def plot_trajectory_comparison(
+    raw_trajectory_df: pd.DataFrame,
+    corrected_trajectory_df: pd.DataFrame,
+    output_path: str | Path,
+    title: str,
+    dpi: int,
+    equal_axis: bool,
+    show_grid: bool,
+) -> None:
+    fig, ax = plt.subplots(figsize=(7, 7))
+    _draw_trajectory(ax, raw_trajectory_df, label="raw", mark_end=False)
+    _draw_trajectory(ax, corrected_trajectory_df, label="corrected", mark_end=True)
+    ax.set_title(title)
+    ax.legend()
+    _style_trajectory_axis(ax, equal_axis, show_grid)
+    _save(fig, output_path, dpi)
+
+
 def plot_overlay(
     trajectories: list[tuple[str, str, pd.DataFrame]],
     output_path: str | Path,
@@ -94,6 +121,22 @@ def plot_overlay(
     ax.legend()
     _style_trajectory_axis(ax, equal_axis, show_grid)
     _save(fig, output_path, dpi)
+
+
+def _shade_turning_regions(axes: list[plt.Axes], heading_df: pd.DataFrame) -> None:
+    mask = heading_df["is_turning"].to_numpy()
+    t = heading_df["t"].to_numpy()
+    if len(mask) == 0:
+        return
+    start = None
+    for i, is_turning in enumerate(mask):
+        if is_turning and start is None:
+            start = i
+        if start is not None and (not is_turning or i == len(mask) - 1):
+            end = i if not is_turning else i + 1
+            for ax in axes:
+                ax.axvspan(t[start], t[end - 1], color="tab:orange", alpha=0.12)
+            start = None
 
 
 def _draw_trajectory(

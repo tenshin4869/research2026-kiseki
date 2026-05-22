@@ -119,6 +119,50 @@ def build_trajectory(
     )
 
 
+def suppress_straight_heading_drift(
+    heading_df: pd.DataFrame,
+    angular_velocity_threshold_rad_s: float,
+    min_turn_duration_s: float,
+    min_turn_angle_deg: float,
+    merge_gap_s: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if angular_velocity_threshold_rad_s <= 0:
+        raise ValueError("angular_velocity_threshold_rad_s must be > 0")
+    if min_turn_duration_s < 0:
+        raise ValueError("min_turn_duration_s must be >= 0")
+    if merge_gap_s < 0:
+        raise ValueError("merge_gap_s must be >= 0")
+    if min_turn_angle_deg < 0:
+        raise ValueError("min_turn_angle_deg must be >= 0")
+
+    t = heading_df["t"].to_numpy()
+    if len(t) < 2:
+        raise ValueError("At least two heading samples are required")
+
+    rate_col = _corrected_rate_column(heading_df)
+    rate = heading_df[rate_col].to_numpy()
+    turn_mask = np.abs(rate) >= angular_velocity_threshold_rad_s
+    turn_mask = _merge_short_false_gaps(t, turn_mask, merge_gap_s)
+    turn_mask = _remove_short_true_runs(t, turn_mask, min_turn_duration_s)
+    turn_mask = _remove_small_angle_true_runs(t, rate, turn_mask, min_turn_angle_deg)
+
+    used_rate = np.where(turn_mask, rate, 0.0)
+    corrected_heading = np.empty_like(used_rate, dtype=float)
+    corrected_heading[0] = float(heading_df["heading_rad"].iloc[0])
+    dt = np.diff(t)
+    trapezoids = 0.5 * (used_rate[:-1] + used_rate[1:]) * dt
+    corrected_heading[1:] = corrected_heading[0] + np.cumsum(trapezoids)
+
+    corrected_df = heading_df.copy()
+    corrected_df["is_turning"] = turn_mask
+    corrected_df["turn_rate_used"] = used_rate
+    corrected_df["heading_raw_rad"] = corrected_df["heading_rad"]
+    corrected_df["heading_rad"] = corrected_heading
+
+    segments_df = _turn_segments(t, turn_mask, corrected_heading)
+    return corrected_df, segments_df
+
+
 def _median_sample_interval(t: np.ndarray) -> float:
     if len(t) < 2:
         raise ValueError("At least two samples are required")
@@ -127,6 +171,107 @@ def _median_sample_interval(t: np.ndarray) -> float:
     if len(dt) == 0:
         raise ValueError("Timestamps must be strictly increasing")
     return float(np.median(dt))
+
+
+def _corrected_rate_column(heading_df: pd.DataFrame) -> str:
+    matches = [col for col in heading_df.columns if col.startswith("gyro_") and col.endswith("_corrected")]
+    if len(matches) != 1:
+        raise ValueError(
+            "Expected exactly one corrected gyro column in heading_df, "
+            f"found {matches}"
+        )
+    return matches[0]
+
+
+def _merge_short_false_gaps(t: np.ndarray, mask: np.ndarray, max_gap_s: float) -> np.ndarray:
+    if max_gap_s == 0:
+        return mask.copy()
+    result = mask.copy()
+    for value, start, end in _runs(mask):
+        if value:
+            continue
+        gap_duration = _run_duration(t, start, end)
+        touches_edge = start == 0 or end == len(mask)
+        if not touches_edge and gap_duration <= max_gap_s:
+            result[start:end] = True
+    return result
+
+
+def _remove_short_true_runs(t: np.ndarray, mask: np.ndarray, min_duration_s: float) -> np.ndarray:
+    if min_duration_s == 0:
+        return mask.copy()
+    result = mask.copy()
+    for value, start, end in _runs(mask):
+        if not value:
+            continue
+        if _run_duration(t, start, end) < min_duration_s:
+            result[start:end] = False
+    return result
+
+
+def _remove_small_angle_true_runs(
+    t: np.ndarray, rate: np.ndarray, mask: np.ndarray, min_angle_deg: float
+) -> np.ndarray:
+    if min_angle_deg == 0:
+        return mask.copy()
+    result = mask.copy()
+    min_angle_rad = np.radians(min_angle_deg)
+    for value, start, end in _runs(mask):
+        if not value:
+            continue
+        if end - start < 2:
+            result[start:end] = False
+            continue
+        angle = np.trapz(rate[start:end], t[start:end])
+        if abs(angle) < min_angle_rad:
+            result[start:end] = False
+    return result
+
+
+def _turn_segments(t: np.ndarray, mask: np.ndarray, heading: np.ndarray) -> pd.DataFrame:
+    rows = []
+    segment_index = 0
+    for value, start, end in _runs(mask):
+        if not value:
+            continue
+        start_idx = start
+        end_idx = end - 1
+        angle_delta = heading[end_idx] - heading[start_idx]
+        rows.append(
+            {
+                "turn_index": segment_index,
+                "start_time": t[start_idx],
+                "end_time": t[end_idx],
+                "duration_s": t[end_idx] - t[start_idx],
+                "angle_delta_rad": angle_delta,
+                "angle_delta_deg": np.degrees(angle_delta),
+                "direction": "right" if angle_delta > 0 else "left",
+            }
+        )
+        segment_index += 1
+    return pd.DataFrame(rows)
+
+
+def _runs(mask: np.ndarray) -> list[tuple[bool, int, int]]:
+    if len(mask) == 0:
+        return []
+    runs = []
+    start = 0
+    current = bool(mask[0])
+    for i in range(1, len(mask)):
+        value = bool(mask[i])
+        if value != current:
+            runs.append((current, start, i))
+            start = i
+            current = value
+    runs.append((current, start, len(mask)))
+    return runs
+
+
+def _run_duration(t: np.ndarray, start: int, end: int) -> float:
+    if end <= start:
+        return 0.0
+    return float(t[end - 1] - t[start])
 
 
 def _gyro_rate_for_heading(

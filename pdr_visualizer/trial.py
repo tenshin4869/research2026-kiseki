@@ -12,8 +12,19 @@ from .io import (
     read_metadata_or_default,
     resolve_trial_dir,
 )
-from .plotting import plot_acc_norm, plot_heading, plot_trajectory
-from .processing import add_acc_norm, build_trajectory, detect_steps, estimate_heading
+from .plotting import (
+    plot_acc_norm,
+    plot_heading,
+    plot_trajectory,
+    plot_trajectory_comparison,
+)
+from .processing import (
+    add_acc_norm,
+    build_trajectory,
+    detect_steps,
+    estimate_heading,
+    suppress_straight_heading_drift,
+)
 
 
 def run_trial(
@@ -59,6 +70,24 @@ def run_trial(
         heading_df,
         step_length_m=float(step_length_m),
     )
+    corrected_heading_df = None
+    turn_segments_df = None
+    corrected_trajectory_df = None
+    if bool(config.get("turn_correction", {}).get("enabled", False)):
+        corrected_heading_df, turn_segments_df = suppress_straight_heading_drift(
+            heading_df,
+            angular_velocity_threshold_rad_s=float(
+                config["turn_correction"]["angular_velocity_threshold_rad_s"]
+            ),
+            min_turn_duration_s=float(config["turn_correction"]["min_turn_duration_s"]),
+            min_turn_angle_deg=float(config["turn_correction"]["min_turn_angle_deg"]),
+            merge_gap_s=float(config["turn_correction"]["merge_gap_s"]),
+        )
+        corrected_trajectory_df = build_trajectory(
+            steps_df,
+            corrected_heading_df,
+            step_length_m=float(step_length_m),
+        )
 
     processed_dir = Path(config["paths"]["processed_dir"])
     figures_dir = Path(config["paths"]["figures_dir"])
@@ -70,14 +99,26 @@ def run_trial(
         "steps": processed_dir / f"{output_id}_steps.csv",
         "heading": processed_dir / f"{output_id}_heading.csv",
         "trajectory": processed_dir / f"{output_id}_trajectory.csv",
+        "heading_corrected": processed_dir / f"{output_id}_heading_corrected.csv",
+        "turn_segments": processed_dir / f"{output_id}_turn_segments.csv",
+        "trajectory_corrected": processed_dir / f"{output_id}_trajectory_corrected.csv",
         "acc_norm_figure": figures_dir / f"{output_id}_acc_norm.png",
         "heading_figure": figures_dir / f"{output_id}_heading.png",
+        "heading_corrected_figure": figures_dir / f"{output_id}_heading_corrected.png",
         "trajectory_figure": figures_dir / f"{output_id}_trajectory.png",
+        "trajectory_corrected_figure": figures_dir / f"{output_id}_trajectory_corrected.png",
+        "trajectory_comparison_figure": figures_dir / f"{output_id}_trajectory_comparison.png",
     }
 
     steps_df.to_csv(paths["steps"], index=False)
     heading_df[["t", "heading_rad"]].to_csv(paths["heading"], index=False)
     trajectory_df.to_csv(paths["trajectory"], index=False)
+    if corrected_heading_df is not None and turn_segments_df is not None and corrected_trajectory_df is not None:
+        corrected_heading_df[
+            ["t", "heading_raw_rad", "heading_rad", "is_turning", "turn_rate_used"]
+        ].to_csv(paths["heading_corrected"], index=False)
+        turn_segments_df.to_csv(paths["turn_segments"], index=False)
+        corrected_trajectory_df.to_csv(paths["trajectory_corrected"], index=False)
 
     dpi = int(config["visualization"]["figure_dpi"])
     show_grid = bool(config["visualization"]["show_grid"])
@@ -92,4 +133,23 @@ def run_trial(
         equal_axis=equal_axis,
         show_grid=show_grid,
     )
+    if corrected_heading_df is not None and corrected_trajectory_df is not None:
+        plot_heading(corrected_heading_df, str(gyro_axis), paths["heading_corrected_figure"], dpi, show_grid)
+        plot_trajectory(
+            corrected_trajectory_df,
+            paths["trajectory_corrected_figure"],
+            title=f"{output_id} corrected",
+            dpi=dpi,
+            equal_axis=equal_axis,
+            show_grid=show_grid,
+        )
+        plot_trajectory_comparison(
+            trajectory_df,
+            corrected_trajectory_df,
+            paths["trajectory_comparison_figure"],
+            title=f"{output_id} raw vs corrected",
+            dpi=dpi,
+            equal_axis=equal_axis,
+            show_grid=show_grid,
+        )
     return paths

@@ -15,6 +15,7 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--holding-position", choices=["hand", "pocket"])
     group.add_argument("--compare", nargs=2, choices=["hand", "pocket"])
+    parser.add_argument("--trajectory-kind", choices=["raw", "corrected"], default="corrected")
     parser.add_argument("--config", default="config.yaml")
     args = parser.parse_args()
 
@@ -24,6 +25,7 @@ def main() -> None:
             config,
             holding_position=args.holding_position,
             compare=tuple(args.compare) if args.compare else None,
+            trajectory_kind=args.trajectory_kind,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise SystemExit(f"Error: {exc}") from exc

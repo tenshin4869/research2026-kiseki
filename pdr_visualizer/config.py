@@ -26,6 +26,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "use_bias_correction": True,
         "bias_static_duration_s": 2.0,
     },
+    "turn_correction": {
+        "enabled": True,
+        "angular_velocity_threshold_rad_s": 0.25,
+        "min_turn_duration_s": 0.25,
+        "min_turn_angle_deg": 10.0,
+        "merge_gap_s": 0.20,
+    },
     "pdr": {
         "step_length_m": 0.65,
     },

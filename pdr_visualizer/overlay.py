@@ -19,9 +19,12 @@ def plot_trials(
     config: dict[str, Any],
     holding_position: str | None = None,
     compare: tuple[str, str] | None = None,
+    trajectory_kind: str = "corrected",
 ) -> Path:
     if holding_position and compare:
         raise ValueError("Use either holding_position or compare, not both")
+    if trajectory_kind not in {"raw", "corrected"}:
+        raise ValueError("trajectory_kind must be 'raw' or 'corrected'")
 
     raw_data_dir = Path(config["paths"]["raw_data_dir"])
     processed_dir = Path(config["paths"]["processed_dir"])
@@ -45,9 +48,15 @@ def plot_trials(
             continue
 
         output_id = output_trial_id(raw_data_dir, trial_path, metadata)
-        trajectory_path = processed_dir / f"{output_id}_trajectory.csv"
+        suffix = "trajectory_corrected" if trajectory_kind == "corrected" else "trajectory"
+        trajectory_path = processed_dir / f"{output_id}_{suffix}.csv"
         if not trajectory_path.exists():
             run_trial(trial_id, config, holding_position=position)
+        if not trajectory_path.exists():
+            raise FileNotFoundError(
+                f"Processed {trajectory_kind} trajectory not found for {output_id}: "
+                f"{trajectory_path}"
+            )
         trajectories.append((output_id, position, pd.read_csv(trajectory_path)))
 
     if not trajectories:
@@ -55,11 +64,13 @@ def plot_trials(
         raise ValueError(f"No trials found for holding_position: {positions}")
 
     if compare:
-        output_path = figures_dir / f"overlay_{compare[0]}_vs_{compare[1]}.png"
-        title = f"{compare[0]} vs {compare[1]}"
+        kind_suffix = "" if trajectory_kind == "corrected" else "_raw"
+        output_path = figures_dir / f"overlay_{compare[0]}_vs_{compare[1]}{kind_suffix}.png"
+        title = f"{compare[0]} vs {compare[1]} ({trajectory_kind})"
     else:
-        output_path = figures_dir / f"overlay_{holding_position}_trials.png"
-        title = f"{holding_position} trials"
+        kind_suffix = "" if trajectory_kind == "corrected" else "_raw"
+        output_path = figures_dir / f"overlay_{holding_position}_trials{kind_suffix}.png"
+        title = f"{holding_position} trials ({trajectory_kind})"
 
     plot_overlay(
         trajectories,
