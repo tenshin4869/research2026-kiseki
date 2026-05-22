@@ -67,8 +67,22 @@ Plot raw overlays instead of corrected overlays:
 python3 scripts/plot_trials.py --holding-position hand --trajectory-kind raw --config config.yaml
 ```
 
+Plot turn-correction v2 overlays:
+
+```bash
+python3 scripts/plot_trials.py --holding-position hand --trajectory-kind v2 --config config.yaml
+```
+
 ## Turn Correction
 
 The corrected trajectory detects turning intervals from angular velocity and only
 integrates heading during those intervals. Straight intervals hold heading fixed,
 which reduces gyro drift without snapping turns to 90 degrees.
+
+Turn-correction v2 adds hysteresis, pre/post turn margins, and straight-segment
+gyro bias re-estimation. Its outputs are separated under:
+
+```text
+outputs/turn_correction_v2/processed/
+outputs/turn_correction_v2/figures/
+```

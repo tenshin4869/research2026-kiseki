@@ -15,7 +15,7 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--holding-position", choices=["hand", "pocket"])
     group.add_argument("--compare", nargs=2, choices=["hand", "pocket"])
-    parser.add_argument("--trajectory-kind", choices=["raw", "corrected"], default="corrected")
+    parser.add_argument("--trajectory-kind", choices=["raw", "corrected", "v2"], default="corrected")
     parser.add_argument("--config", default="config.yaml")
     args = parser.parse_args()
 

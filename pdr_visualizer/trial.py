@@ -24,6 +24,7 @@ from .processing import (
     detect_steps,
     estimate_heading,
     suppress_straight_heading_drift,
+    suppress_straight_heading_drift_v2,
 )
 
 
@@ -73,6 +74,9 @@ def run_trial(
     corrected_heading_df = None
     turn_segments_df = None
     corrected_trajectory_df = None
+    corrected_v2_heading_df = None
+    turn_segments_v2_df = None
+    corrected_v2_trajectory_df = None
     if bool(config.get("turn_correction", {}).get("enabled", False)):
         corrected_heading_df, turn_segments_df = suppress_straight_heading_drift(
             heading_df,
@@ -88,11 +92,35 @@ def run_trial(
             corrected_heading_df,
             step_length_m=float(step_length_m),
         )
+    if bool(config.get("turn_correction_v2", {}).get("enabled", False)):
+        corrected_v2_heading_df, turn_segments_v2_df = suppress_straight_heading_drift_v2(
+            heading_df,
+            start_threshold_rad_s=float(config["turn_correction_v2"]["start_threshold_rad_s"]),
+            end_threshold_rad_s=float(config["turn_correction_v2"]["end_threshold_rad_s"]),
+            pre_turn_margin_s=float(config["turn_correction_v2"]["pre_turn_margin_s"]),
+            post_turn_margin_s=float(config["turn_correction_v2"]["post_turn_margin_s"]),
+            min_turn_duration_s=float(config["turn_correction_v2"]["min_turn_duration_s"]),
+            min_turn_angle_deg=float(config["turn_correction_v2"]["min_turn_angle_deg"]),
+            merge_gap_s=float(config["turn_correction_v2"]["merge_gap_s"]),
+            update_bias_from_straight=bool(
+                config["turn_correction_v2"]["update_bias_from_straight"]
+            ),
+        )
+        corrected_v2_trajectory_df = build_trajectory(
+            steps_df,
+            corrected_v2_heading_df,
+            step_length_m=float(step_length_m),
+        )
 
     processed_dir = Path(config["paths"]["processed_dir"])
     figures_dir = Path(config["paths"]["figures_dir"])
+    v2_subdir = str(config.get("turn_correction_v2", {}).get("output_subdir", "turn_correction_v2"))
+    processed_v2_dir = Path("outputs") / v2_subdir / "processed"
+    figures_v2_dir = Path("outputs") / v2_subdir / "figures"
     processed_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
+    processed_v2_dir.mkdir(parents=True, exist_ok=True)
+    figures_v2_dir.mkdir(parents=True, exist_ok=True)
     output_id = output_trial_id(config["paths"]["raw_data_dir"], raw_dir, metadata)
 
     paths = {
@@ -108,6 +136,13 @@ def run_trial(
         "trajectory_figure": figures_dir / f"{output_id}_trajectory.png",
         "trajectory_corrected_figure": figures_dir / f"{output_id}_trajectory_corrected.png",
         "trajectory_comparison_figure": figures_dir / f"{output_id}_trajectory_comparison.png",
+        "heading_v2": processed_v2_dir / f"{output_id}_heading_v2.csv",
+        "turn_segments_v2": processed_v2_dir / f"{output_id}_turn_segments_v2.csv",
+        "trajectory_v2": processed_v2_dir / f"{output_id}_trajectory_v2.csv",
+        "heading_v2_figure": figures_v2_dir / f"{output_id}_heading_v2.png",
+        "trajectory_v2_figure": figures_v2_dir / f"{output_id}_trajectory_v2.png",
+        "trajectory_v2_comparison_figure": figures_v2_dir
+        / f"{output_id}_trajectory_v2_comparison.png",
     }
 
     steps_df.to_csv(paths["steps"], index=False)
@@ -119,6 +154,23 @@ def run_trial(
         ].to_csv(paths["heading_corrected"], index=False)
         turn_segments_df.to_csv(paths["turn_segments"], index=False)
         corrected_trajectory_df.to_csv(paths["trajectory_corrected"], index=False)
+    if (
+        corrected_v2_heading_df is not None
+        and turn_segments_v2_df is not None
+        and corrected_v2_trajectory_df is not None
+    ):
+        corrected_v2_heading_df[
+            [
+                "t",
+                "heading_raw_rad",
+                "heading_rad",
+                "is_turning",
+                "turn_rate_used",
+                "straight_bias_delta",
+            ]
+        ].to_csv(paths["heading_v2"], index=False)
+        turn_segments_v2_df.to_csv(paths["turn_segments_v2"], index=False)
+        corrected_v2_trajectory_df.to_csv(paths["trajectory_v2"], index=False)
 
     dpi = int(config["visualization"]["figure_dpi"])
     show_grid = bool(config["visualization"]["show_grid"])
@@ -148,6 +200,25 @@ def run_trial(
             corrected_trajectory_df,
             paths["trajectory_comparison_figure"],
             title=f"{output_id} raw vs corrected",
+            dpi=dpi,
+            equal_axis=equal_axis,
+            show_grid=show_grid,
+        )
+    if corrected_v2_heading_df is not None and corrected_v2_trajectory_df is not None:
+        plot_heading(corrected_v2_heading_df, str(gyro_axis), paths["heading_v2_figure"], dpi, show_grid)
+        plot_trajectory(
+            corrected_v2_trajectory_df,
+            paths["trajectory_v2_figure"],
+            title=f"{output_id} turn correction v2",
+            dpi=dpi,
+            equal_axis=equal_axis,
+            show_grid=show_grid,
+        )
+        plot_trajectory_comparison(
+            trajectory_df,
+            corrected_v2_trajectory_df,
+            paths["trajectory_v2_comparison_figure"],
+            title=f"{output_id} raw vs turn correction v2",
             dpi=dpi,
             equal_axis=equal_axis,
             show_grid=show_grid,

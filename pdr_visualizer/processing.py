@@ -163,6 +163,65 @@ def suppress_straight_heading_drift(
     return corrected_df, segments_df
 
 
+def suppress_straight_heading_drift_v2(
+    heading_df: pd.DataFrame,
+    start_threshold_rad_s: float,
+    end_threshold_rad_s: float,
+    pre_turn_margin_s: float,
+    post_turn_margin_s: float,
+    min_turn_duration_s: float,
+    min_turn_angle_deg: float,
+    merge_gap_s: float,
+    update_bias_from_straight: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if start_threshold_rad_s <= 0:
+        raise ValueError("start_threshold_rad_s must be > 0")
+    if end_threshold_rad_s <= 0:
+        raise ValueError("end_threshold_rad_s must be > 0")
+    if end_threshold_rad_s > start_threshold_rad_s:
+        raise ValueError("end_threshold_rad_s must be <= start_threshold_rad_s")
+    if pre_turn_margin_s < 0 or post_turn_margin_s < 0:
+        raise ValueError("turn margins must be >= 0")
+
+    t = heading_df["t"].to_numpy()
+    if len(t) < 2:
+        raise ValueError("At least two heading samples are required")
+
+    rate_col = _corrected_rate_column(heading_df)
+    rate = heading_df[rate_col].to_numpy()
+    turn_mask = _hysteresis_turn_mask(rate, start_threshold_rad_s, end_threshold_rad_s)
+    turn_mask = _merge_short_false_gaps(t, turn_mask, merge_gap_s)
+    turn_mask = _expand_mask_by_time(t, turn_mask, pre_turn_margin_s, post_turn_margin_s)
+    turn_mask = _remove_short_true_runs(t, turn_mask, min_turn_duration_s)
+
+    bias_delta = 0.0
+    if update_bias_from_straight and np.any(~turn_mask):
+        bias_delta = float(np.median(rate[~turn_mask]))
+    rate_bias_corrected = rate - bias_delta
+    turn_mask = _remove_small_angle_true_runs(
+        t, rate_bias_corrected, turn_mask, min_turn_angle_deg
+    )
+
+    used_rate = np.where(turn_mask, rate_bias_corrected, 0.0)
+    corrected_heading = np.empty_like(used_rate, dtype=float)
+    corrected_heading[0] = float(heading_df["heading_rad"].iloc[0])
+    dt = np.diff(t)
+    trapezoids = 0.5 * (used_rate[:-1] + used_rate[1:]) * dt
+    corrected_heading[1:] = corrected_heading[0] + np.cumsum(trapezoids)
+
+    corrected_df = heading_df.copy()
+    corrected_df["is_turning"] = turn_mask
+    corrected_df["turn_rate_used"] = used_rate
+    corrected_df["straight_bias_delta"] = bias_delta
+    corrected_df["heading_raw_rad"] = corrected_df["heading_rad"]
+    corrected_df["heading_rad"] = corrected_heading
+
+    segments_df = _turn_segments(t, turn_mask, corrected_heading)
+    if not segments_df.empty:
+        segments_df["straight_bias_delta_rad_s"] = bias_delta
+    return corrected_df, segments_df
+
+
 def _median_sample_interval(t: np.ndarray) -> float:
     if len(t) < 2:
         raise ValueError("At least two samples are required")
@@ -194,6 +253,40 @@ def _merge_short_false_gaps(t: np.ndarray, mask: np.ndarray, max_gap_s: float) -
         touches_edge = start == 0 or end == len(mask)
         if not touches_edge and gap_duration <= max_gap_s:
             result[start:end] = True
+    return result
+
+
+def _hysteresis_turn_mask(
+    rate: np.ndarray, start_threshold: float, end_threshold: float
+) -> np.ndarray:
+    mask = np.zeros(len(rate), dtype=bool)
+    in_turn = False
+    for i, value in enumerate(np.abs(rate)):
+        if in_turn:
+            if value <= end_threshold:
+                in_turn = False
+            else:
+                mask[i] = True
+        elif value >= start_threshold:
+            in_turn = True
+            mask[i] = True
+    return mask
+
+
+def _expand_mask_by_time(
+    t: np.ndarray, mask: np.ndarray, pre_margin_s: float, post_margin_s: float
+) -> np.ndarray:
+    if pre_margin_s == 0 and post_margin_s == 0:
+        return mask.copy()
+    result = mask.copy()
+    for value, start, end in _runs(mask):
+        if not value:
+            continue
+        start_time = t[start] - pre_margin_s
+        end_time = t[end - 1] + post_margin_s
+        expanded_start = int(np.searchsorted(t, start_time, side="left"))
+        expanded_end = int(np.searchsorted(t, end_time, side="right"))
+        result[expanded_start:expanded_end] = True
     return result
 
 
@@ -229,6 +322,15 @@ def _remove_small_angle_true_runs(
 
 
 def _turn_segments(t: np.ndarray, mask: np.ndarray, heading: np.ndarray) -> pd.DataFrame:
+    columns = [
+        "turn_index",
+        "start_time",
+        "end_time",
+        "duration_s",
+        "angle_delta_rad",
+        "angle_delta_deg",
+        "direction",
+    ]
     rows = []
     segment_index = 0
     for value, start, end in _runs(mask):
@@ -249,7 +351,7 @@ def _turn_segments(t: np.ndarray, mask: np.ndarray, heading: np.ndarray) -> pd.D
             }
         )
         segment_index += 1
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _runs(mask: np.ndarray) -> list[tuple[bool, int, int]]:

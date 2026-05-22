@@ -20,6 +20,18 @@ turn_correction:
   min_turn_angle_deg: 10.0
   merge_gap_s: 0.20
 
+turn_correction_v2:
+  enabled: true
+  output_subdir: "turn_correction_v2"
+  start_threshold_rad_s: 0.25
+  end_threshold_rad_s: 0.10
+  pre_turn_margin_s: 0.30
+  post_turn_margin_s: 0.30
+  min_turn_duration_s: 0.25
+  min_turn_angle_deg: 20.0
+  merge_gap_s: 0.20
+  update_bias_from_straight: false
+
 pdr:
   step_length_m: 0.65
 

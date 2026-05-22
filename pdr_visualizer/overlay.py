@@ -23,13 +23,17 @@ def plot_trials(
 ) -> Path:
     if holding_position and compare:
         raise ValueError("Use either holding_position or compare, not both")
-    if trajectory_kind not in {"raw", "corrected"}:
-        raise ValueError("trajectory_kind must be 'raw' or 'corrected'")
+    if trajectory_kind not in {"raw", "corrected", "v2"}:
+        raise ValueError("trajectory_kind must be 'raw', 'corrected', or 'v2'")
 
     raw_data_dir = Path(config["paths"]["raw_data_dir"])
     processed_dir = Path(config["paths"]["processed_dir"])
     figures_dir = Path(config["paths"]["figures_dir"])
+    v2_subdir = str(config.get("turn_correction_v2", {}).get("output_subdir", "turn_correction_v2"))
+    processed_v2_dir = Path("outputs") / v2_subdir / "processed"
+    figures_v2_dir = Path("outputs") / v2_subdir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
+    figures_v2_dir.mkdir(parents=True, exist_ok=True)
 
     target_positions = set(compare) if compare else {holding_position}
     if None in target_positions:
@@ -48,8 +52,11 @@ def plot_trials(
             continue
 
         output_id = output_trial_id(raw_data_dir, trial_path, metadata)
-        suffix = "trajectory_corrected" if trajectory_kind == "corrected" else "trajectory"
-        trajectory_path = processed_dir / f"{output_id}_{suffix}.csv"
+        if trajectory_kind == "v2":
+            trajectory_path = processed_v2_dir / f"{output_id}_trajectory_v2.csv"
+        else:
+            suffix = "trajectory_corrected" if trajectory_kind == "corrected" else "trajectory"
+            trajectory_path = processed_dir / f"{output_id}_{suffix}.csv"
         if not trajectory_path.exists():
             run_trial(trial_id, config, holding_position=position)
         if not trajectory_path.exists():
@@ -64,12 +71,14 @@ def plot_trials(
         raise ValueError(f"No trials found for holding_position: {positions}")
 
     if compare:
-        kind_suffix = "" if trajectory_kind == "corrected" else "_raw"
-        output_path = figures_dir / f"overlay_{compare[0]}_vs_{compare[1]}{kind_suffix}.png"
+        kind_suffix = "" if trajectory_kind == "corrected" else f"_{trajectory_kind}"
+        output_dir = figures_v2_dir if trajectory_kind == "v2" else figures_dir
+        output_path = output_dir / f"overlay_{compare[0]}_vs_{compare[1]}{kind_suffix}.png"
         title = f"{compare[0]} vs {compare[1]} ({trajectory_kind})"
     else:
-        kind_suffix = "" if trajectory_kind == "corrected" else "_raw"
-        output_path = figures_dir / f"overlay_{holding_position}_trials{kind_suffix}.png"
+        kind_suffix = "" if trajectory_kind == "corrected" else f"_{trajectory_kind}"
+        output_dir = figures_v2_dir if trajectory_kind == "v2" else figures_dir
+        output_path = output_dir / f"overlay_{holding_position}_trials{kind_suffix}.png"
         title = f"{holding_position} trials ({trajectory_kind})"
 
     plot_overlay(
