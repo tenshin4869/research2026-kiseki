@@ -7,7 +7,6 @@ from .io import (
     infer_holding_position,
     output_trial_id,
     read_accelerometer_csv,
-    read_gravity_csv,
     read_gyroscope_csv,
     read_metadata_or_default,
     resolve_trial_dir,
@@ -28,8 +27,6 @@ def run_trial(
         metadata["holding_position"] = inferred_position
     acc_df = read_accelerometer_csv(raw_dir / "Accelerometer.csv")
     gyro_df = read_gyroscope_csv(raw_dir / "Gyroscope.csv")
-    gravity_path = raw_dir / "Gravity.csv"
-    gravity_df = read_gravity_csv(gravity_path) if gravity_path.exists() else None
 
     gyro_axis = metadata.get("gyro_axis", config["heading"]["gyro_axis"])
     gyro_sign = metadata.get("gyro_sign", config["heading"]["gyro_sign"])
@@ -52,7 +49,6 @@ def run_trial(
         initial_heading_rad=float(config["heading"]["initial_heading_rad"]),
         use_bias_correction=bool(config["heading"].get("use_bias_correction", True)),
         bias_static_duration_s=float(config["heading"]["bias_static_duration_s"]),
-        gravity_df=gravity_df,
     )
     trajectory_df = build_trajectory(
         steps_df,

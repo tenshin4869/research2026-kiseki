@@ -48,10 +48,12 @@ def estimate_heading(
     initial_heading_rad: float,
     use_bias_correction: bool,
     bias_static_duration_s: float,
-    gravity_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     df = gyro_df.copy()
-    axis_col, raw = _gyro_rate_for_heading(df, gyro_axis, gravity_df)
+    axis_col = f"gyro_{gyro_axis}"
+    if axis_col not in gyro_df.columns:
+        raise ValueError("gyro_axis must be one of: x, y, z")
+    raw = df[axis_col].to_numpy()
     if use_bias_correction:
         static_mask = df["t"].to_numpy() <= bias_static_duration_s
         if not static_mask.any():
@@ -128,34 +130,3 @@ def _median_sample_interval(t: np.ndarray) -> float:
         raise ValueError("Timestamps must be strictly increasing")
     return float(np.median(dt))
 
-
-def _gyro_rate_for_heading(
-    gyro_df: pd.DataFrame, gyro_axis: str, gravity_df: pd.DataFrame | None
-) -> tuple[str, np.ndarray]:
-    if gyro_axis in {"vertical", "gravity", "auto"}:
-        if gravity_df is None:
-            raise ValueError(
-                "gyro_axis='vertical' requires Gravity.csv. "
-                "Use gyro_axis x, y, or z if Gravity.csv is unavailable."
-            )
-        t = gyro_df["t"].to_numpy()
-        gravity = np.column_stack(
-            [
-                np.interp(t, gravity_df["t"], gravity_df["gravity_x"]),
-                np.interp(t, gravity_df["t"], gravity_df["gravity_y"]),
-                np.interp(t, gravity_df["t"], gravity_df["gravity_z"]),
-            ]
-        )
-        norm = np.linalg.norm(gravity, axis=1)
-        if np.any(norm == 0):
-            raise ValueError("Gravity.csv contains zero-length gravity samples")
-        gravity_unit = gravity / norm[:, None]
-        omega = gyro_df[["gyro_x", "gyro_y", "gyro_z"]].to_numpy()
-        # Project device angular velocity onto the gravity direction. The final
-        # sign convention is controlled by heading.gyro_sign.
-        return "gyro_vertical", np.sum(omega * gravity_unit, axis=1)
-
-    axis_col = f"gyro_{gyro_axis}"
-    if axis_col not in gyro_df.columns:
-        raise ValueError("gyro_axis must be one of: vertical, x, y, z")
-    return axis_col, gyro_df[axis_col].to_numpy()

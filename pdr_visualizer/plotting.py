@@ -4,7 +4,9 @@ import os
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "kiseki_matplotlib_cache"))
+cache_root = Path(tempfile.gettempdir()) / "kiseki_cache"
+os.environ.setdefault("MPLCONFIGDIR", str(cache_root / "matplotlib"))
+os.environ.setdefault("XDG_CACHE_HOME", str(cache_root / "xdg"))
 
 import matplotlib
 
