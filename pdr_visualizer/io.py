@@ -21,12 +21,35 @@ GYRO_COLUMNS = {
     "Z (rad/s)": "gyro_z",
 }
 
+MAG_COLUMNS = {
+    "Time (s)": "t",
+    "X (µT)": "mag_x",
+    "Y (µT)": "mag_y",
+    "Z (µT)": "mag_z",
+}
+
+GRAVITY_COLUMNS = {
+    "Time (s)": "t",
+    "Gravity X (m/s^2)": "gravity_x",
+    "Gravity Y (m/s^2)": "gravity_y",
+    "Gravity Z (m/s^2)": "gravity_z",
+}
+
+
 def read_accelerometer_csv(path: str | Path) -> pd.DataFrame:
     return _read_phyphox_csv(path, ACC_COLUMNS, "accelerometer")
 
 
 def read_gyroscope_csv(path: str | Path) -> pd.DataFrame:
     return _read_phyphox_csv(path, GYRO_COLUMNS, "gyroscope")
+
+
+def read_magnetometer_csv(path: str | Path) -> pd.DataFrame:
+    return _read_phyphox_csv(path, MAG_COLUMNS, "magnetometer")
+
+
+def read_gravity_csv(path: str | Path) -> pd.DataFrame:
+    return _read_phyphox_csv(path, GRAVITY_COLUMNS, "gravity")
 
 
 def read_metadata(path: str | Path) -> dict[str, Any]:
