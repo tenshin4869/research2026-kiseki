@@ -56,19 +56,20 @@ def run_trial(
         step_length_m=float(step_length_m),
     )
 
-    processed_dir = Path(config["paths"]["processed_dir"])
-    figures_dir = Path(config["paths"]["figures_dir"])
+    output_id = output_trial_id(config["paths"]["raw_data_dir"], raw_dir, metadata)
+    trial_output_dir = Path("outputs") / output_id
+    processed_dir = trial_output_dir / "processed"
+    figures_dir = trial_output_dir / "figures"
     processed_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
-    output_id = output_trial_id(config["paths"]["raw_data_dir"], raw_dir, metadata)
 
     paths = {
-        "steps": processed_dir / f"{output_id}_steps.csv",
-        "heading": processed_dir / f"{output_id}_heading.csv",
-        "trajectory": processed_dir / f"{output_id}_trajectory.csv",
-        "acc_norm_figure": figures_dir / f"{output_id}_acc_norm.png",
-        "heading_figure": figures_dir / f"{output_id}_heading.png",
-        "trajectory_figure": figures_dir / f"{output_id}_trajectory.png",
+        "steps": processed_dir / "steps.csv",
+        "heading": processed_dir / "heading.csv",
+        "trajectory": processed_dir / "trajectory.csv",
+        "acc_norm_figure": figures_dir / "acc_norm.png",
+        "heading_figure": figures_dir / "heading.png",
+        "trajectory_figure": figures_dir / "trajectory.png",
     }
 
     steps_df.to_csv(paths["steps"], index=False)

@@ -24,9 +24,8 @@ def plot_trials(
         raise ValueError("Use either holding_position or compare, not both")
 
     raw_data_dir = Path(config["paths"]["raw_data_dir"])
-    processed_dir = Path(config["paths"]["processed_dir"])
-    figures_dir = Path(config["paths"]["figures_dir"])
-    figures_dir.mkdir(parents=True, exist_ok=True)
+    overlay_dir = Path("outputs") / "overlays"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
 
     target_positions = set(compare) if compare else {holding_position}
     if None in target_positions:
@@ -45,9 +44,11 @@ def plot_trials(
             continue
 
         output_id = output_trial_id(raw_data_dir, trial_path, metadata)
-        trajectory_path = processed_dir / f"{output_id}_trajectory.csv"
+        trajectory_path = Path("outputs") / output_id / "processed" / "trajectory.csv"
         if not trajectory_path.exists():
             run_trial(trial_id, config, holding_position=position)
+        if not trajectory_path.exists():
+            raise FileNotFoundError(f"Processed trajectory not found: {trajectory_path}")
         trajectories.append((output_id, position, pd.read_csv(trajectory_path)))
 
     if not trajectories:
@@ -55,10 +56,10 @@ def plot_trials(
         raise ValueError(f"No trials found for holding_position: {positions}")
 
     if compare:
-        output_path = figures_dir / f"overlay_{compare[0]}_vs_{compare[1]}.png"
+        output_path = overlay_dir / f"{compare[0]}_vs_{compare[1]}" / "trajectory_overlay.png"
         title = f"{compare[0]} vs {compare[1]}"
     else:
-        output_path = figures_dir / f"overlay_{holding_position}_trials.png"
+        output_path = overlay_dir / str(holding_position) / "trajectory_overlay.png"
         title = f"{holding_position} trials"
 
     plot_overlay(
