@@ -25,11 +25,13 @@ def run_trial(
     inferred_position = infer_holding_position(raw_dir)
     if inferred_position and metadata.get("holding_position") in {None, "", "unknown"}:
         metadata["holding_position"] = inferred_position
+    output_id = output_trial_id(config["paths"]["raw_data_dir"], raw_dir, metadata)
     acc_df = read_accelerometer_csv(raw_dir / "Accelerometer.csv")
     gyro_df = read_gyroscope_csv(raw_dir / "Gyroscope.csv")
 
     gyro_axis = metadata.get("gyro_axis", config["heading"]["gyro_axis"])
     gyro_sign = metadata.get("gyro_sign", config["heading"]["gyro_sign"])
+    gyro_sign = config["heading"].get("gyro_sign_overrides", {}).get(output_id, gyro_sign)
     step_length_m = metadata.get("step_length_m", config["pdr"]["step_length_m"])
 
     acc_df = add_acc_norm(
@@ -56,7 +58,6 @@ def run_trial(
         step_length_m=float(step_length_m),
     )
 
-    output_id = output_trial_id(config["paths"]["raw_data_dir"], raw_dir, metadata)
     trial_output_dir = Path("outputs") / output_id
     processed_dir = trial_output_dir / "processed"
     figures_dir = trial_output_dir / "figures"

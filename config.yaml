@@ -8,7 +8,9 @@ step_detection:
 
 heading:
   gyro_axis: "z"
-  gyro_sign: 1.0
+  gyro_sign: -1.0
+  gyro_sign_overrides:
+    hand_002_turnright: 1.0
   initial_heading_rad: 0.0
   use_bias_correction: true
   bias_static_duration_s: 2.0

@@ -20,8 +20,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "prominence": 0.4,
     },
     "heading": {
-        "gyro_axis": "vertical",
+        "gyro_axis": "z",
         "gyro_sign": -1.0,
+        "gyro_sign_overrides": {},
         "initial_heading_rad": 0.0,
         "use_bias_correction": True,
         "bias_static_duration_s": 2.0,
@@ -68,21 +69,25 @@ def _deep_update(base: dict[str, Any], override: dict[str, Any]) -> None:
 def _load_simple_yaml(text: str) -> dict[str, Any]:
     """Parse the small nested key/value YAML shape used by config.yaml."""
     root: dict[str, Any] = {}
-    current_section: dict[str, Any] | None = None
+    stack: list[tuple[int, dict[str, Any]]] = [(-1, root)]
 
     for raw_line in text.splitlines():
         line = raw_line.split("#", 1)[0].rstrip()
         if not line.strip():
             continue
-        if not raw_line.startswith(" "):
-            key = line.rstrip(":")
-            root[key] = {}
-            current_section = root[key]
-            continue
-        if current_section is None or ":" not in line:
+        if ":" not in line:
             raise ValueError("Unsupported config.yaml format without PyYAML installed")
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
         key, value = line.strip().split(":", 1)
-        current_section[key] = _parse_scalar(value.strip())
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        parent = stack[-1][1]
+        value = value.strip()
+        if value == "":
+            parent[key] = {}
+            stack.append((indent, parent[key]))
+        else:
+            parent[key] = _parse_scalar(value)
 
     return root
 
